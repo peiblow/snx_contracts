@@ -1,0 +1,136 @@
+contract SynxAgentGov {
+
+  agent OpenClawOrchestrator {
+    version: "1.0.0"
+    owner: 0xAB1234CD56EF7890
+    purpose: "agent_governance"
+  }
+
+  policy AgentPolicy {
+    maxTransactionCost: 500
+    maxDailyTransaction: 5000
+    maxLlmCostPerTurn: 2
+    maxInfraMonthlyCost: 100
+    humanApprovalThreshold: 1000
+    blockedDomains: [
+      "competitor.com",
+      "phishing.net",
+      "malware.xyz"
+    ]
+    irreversibleActions: [
+      "delete_repo",
+      "drop_database",
+      "wipe_disk",
+      "force_push_main",
+      "revoke_all_tokens"
+    ]
+  }
+
+  type AuthorizeInput {
+    agent_id: String
+    action_type: String
+    cost_type: String
+    amount: UInt
+    daily_transaction_spend: UInt
+    target_domain: String
+  }
+
+  fn authorizeAction(input: AuthorizeInput): Event {
+    if (AgentPolicy.irreversibleActions[input.action_type] != null) {
+      emit("HumanApprovalRequired", {
+        reason: "irreversible_action",
+        agent_id: input.agent_id,
+        action: input.action_type
+      })
+
+      return
+    }
+
+    try {
+      if (input.cost_type == "transaction") {
+        require(
+          input.amount <= AgentPolicy.maxTransactionCost;
+          Error("TX_COST_EXCEEDS", "Transaction cost exceeds per-call limit")
+        )
+        require(
+          input.daily_transaction_spend + input.amount <= AgentPolicy.maxDailyTransaction;
+          Error("DAILY_TX_EXHAUSTED", "Daily transaction budget exhausted")
+        )
+      }
+
+      if (input.cost_type == "llm_tokens") {
+        require(
+          input.amount <= AgentPolicy.maxLlmCostPerTurn;
+          Error("LLM_COST_EXCEEDS", "LLM cost exceeds per-turn limit")
+        )
+      }
+
+      if (input.cost_type == "infra") {
+        require(
+          input.amount <= AgentPolicy.maxInfraMonthlyCost;
+          Error("INFRA_COST_EXCEEDS", "Infrastructure cost exceeds monthly limit")
+        )
+      }
+
+      if (input.amount > AgentPolicy.humanApprovalThreshold) {
+        emit("HumanApprovalRequired", {
+          reason: "above_threshold",
+          agent_id: input.agent_id,
+          action: input.action_type,
+          amount: input.amount
+        })
+      } else {
+        proof = hash("SHA256",
+                     input.agent_id,
+                     input.action_type,
+                     input.cost_type,
+                     input.amount)
+
+        emit("ActionAuthorized", {
+          agent_id: input.agent_id,
+          action: input.action_type,
+          cost_type: input.cost_type,
+          amount: input.amount,
+          proofHash: proof
+        })
+      }
+    } catch (err) {
+      if (err.code == "TX_COST_EXCEEDS") {
+        emit("ActionRejected", {
+          agent_id: input.agent_id,
+          action: input.action_type,
+          reason: "transaction_cost_exceeds",
+          amount: input.amount
+        })
+      } else if (err.code == "DAILY_TX_EXHAUSTED") {
+        emit("ActionRejected", {
+          agent_id: input.agent_id,
+          action: input.action_type,
+          reason: "daily_budget_exhausted",
+          amount: input.amount
+        })
+      } else if (err.code == "LLM_COST_EXCEEDS") {
+        emit("ActionRejected", {
+          agent_id: input.agent_id,
+          action: input.action_type,
+          reason: "llm_cost_exceeds_turn",
+          amount: input.amount
+        })
+      } else if (err.code == "INFRA_COST_EXCEEDS") {
+        emit("ActionRejected", {
+          agent_id: input.agent_id,
+          action: input.action_type,
+          reason: "infra_cost_exceeds_monthly",
+          amount: input.amount
+        })
+      } else {
+        emit("ActionRejected", {
+          agent_id: input.agent_id,
+          action: input.action_type,
+          reason: "unknown_error",
+          message: err.message
+        })
+      }
+    }
+  }
+}

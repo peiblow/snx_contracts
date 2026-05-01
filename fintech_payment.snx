@@ -1,0 +1,213 @@
+contract SynxGovernance {
+  agent CreditAnalyzerFL {
+    version: "2.0.0"
+    owner: 0xA1B2C3D4
+    purpose: "credit_analysis"
+  }
+
+  policy CreditPolicy {
+    minScore: 650
+    maxAmount: 500000
+    maxDebtPercent: 35
+    ranges: [
+      { min: 300, max: 549, limit: 0 },
+      { min: 550, max: 649, limit: 2000 },
+      { min: 650, max: 749, limit: 25000 },
+      { min: 750, max: 849, limit: 100000 },
+      { min: 850, max: 900, limit: 500000 }
+    ]
+    maxDrift: 5
+    requiredApprovals: 2
+    allowedPurposes: ["credit_analysis", "fraud_detection", "risk_assessment", "payment_verification"]
+    blockedOwners: []
+    maxPaymentAmount: 1000000
+    minPaymentAmount: 1
+    expirationWindow: 86400
+  }
+
+  type CreditRequest {
+    client: Address
+    model_id: String
+    score: UInt
+    income: UInt
+    debtPercent: UInt
+    amount: UInt
+  }
+
+  type AgentRegistration {
+    agentName: String
+    version: String
+    owner: Address
+    purpose: String
+  }
+
+  type AgentVersionUpdate {
+    agentName: String
+    currentMajor: UInt
+    newMajor: UInt
+    owner: Address
+    approvals: UInt
+  }
+
+  type AgentRevocation {
+    agentName: String
+    owner: Address
+    reason: String
+  }
+
+  type PaymentProofInput {
+    payer: Address
+    receiver: Address
+    amount: UInt
+    tx_hash: String
+    timestamp: UInt
+    nonce: String
+  }
+
+  type PaymentSettlement {
+    settlement_id: String
+    payer: Address
+    receiver: Address
+    amount: UInt
+    proof_hash: String
+  }
+
+  type PaymentExpiration {
+    tx_hash: String
+    timestamp: UInt
+    currentTime: UInt
+  }
+
+  fn getLimit(score: UInt): UInt {
+    for (i = 0; i < len(CreditPolicy.ranges); i = i + 1) {
+      range = CreditPolicy.ranges[i]
+      if (score >= range.min && score <= range.max) {
+        return range.limit
+      }
+    }
+    return 0
+  }
+
+  fn creditDecision(request: CreditRequest): Event {
+    require(request.score >= CreditPolicy.minScore; "Credit score below minimum threshold")
+    require(request.debtPercent <= CreditPolicy.maxDebtPercent; "Debt ratio exceeds maximum allowed")
+    require(request.amount <= CreditPolicy.maxAmount; "Requested amount exceeds policy limit")
+
+    const limit = getLimit(request.score)
+    require(limit > 0; "Score falls in denied tier")
+    require(request.amount <= limit; "Amount exceeds tier limit")
+
+    const decisionId = hash("SHA256", request.client, request.score, request.amount, request.income)
+
+    emit("CreditDecisionApproved", {
+      client: request.client,
+      score: request.score,
+      amount: request.amount,
+      approvedLimit: limit,
+      nonce: decisionId
+    })
+  }
+
+  fn creditRejection(request: CreditRequest): Event {
+    const limit = getLimit(request.score)
+    const rejectionId = hash("SHA256", request.client, request.score, request.amount)
+
+    emit("CreditDecisionRejected", {
+      client: request.client,
+      score: request.score,
+      amount: request.amount,
+      tierLimit: limit,
+      nonce: rejectionId
+    })
+  }
+
+  fn registerAgent(registration: AgentRegistration): Event {
+    require(registration.agentName != ""; "Agent name is required")
+    require(registration.version != ""; "Version is required")
+
+    const agentId = hash("SHA256", registration.agentName, registration.version, registration.owner)
+
+    emit("AgentRegistered", {
+      agentName: registration.agentName,
+      version: registration.version,
+      owner: registration.owner,
+      purpose: registration.purpose,
+      nonce: agentId
+    })
+  }
+
+  fn updateAgentVersion(update: AgentVersionUpdate): Event {
+    require(update.approvals >= CreditPolicy.requiredApprovals; "Insufficient approvals for version update")
+    require(update.newMajor > update.currentMajor; "New version must be greater than current version")
+    require(update.newMajor - update.currentMajor <= CreditPolicy.maxDrift; "Version drift exceeds maximum allowed")
+
+    const updateId = hash("SHA256", update.agentName, update.currentMajor, update.newMajor)
+
+    emit("AgentVersionUpdated", {
+      agentName: update.agentName,
+      previousMajor: update.currentMajor,
+      newMajor: update.newMajor,
+      approvals: update.approvals,
+      nonce: updateId
+    })
+  }
+
+  fn revokeAgent(input: AgentRevocation): Event {
+    require(input.agentName != ""; "Agent name is required")
+    require(input.reason != ""; "Revocation reason is required")
+
+    const revocationId = hash("SHA256", input.agentName, input.owner, input.reason)
+
+    emit("AgentRevoked", {
+      agentName: input.agentName,
+      owner: input.owner,
+      reason: input.reason,
+      nonce: revocationId
+    })
+  }
+
+  fn verifyPayment(payment: PaymentProofInput): Event {
+    require(payment.amount >= CreditPolicy.minPaymentAmount; "Payment amount below minimum")
+    require(payment.amount <= CreditPolicy.maxPaymentAmount; "Payment amount exceeds maximum")
+    require(payment.payer != payment.receiver; "Payer and receiver cannot be the same address")
+
+    const proofHash = hash("SHA256", payment.tx_hash, payment.nonce, payment.timestamp)
+    const settlementId = hash("SHA256", payment.payer, payment.receiver, payment.amount, payment.nonce)
+
+    emit("PaymentVerified", {
+      payer: payment.payer,
+      receiver: payment.receiver,
+      amount: payment.amount,
+      proofHash: proofHash,
+      nonce: settlementId
+    })
+  }
+
+  fn settlePayment(settlement: PaymentSettlement): Event {
+    require(settlement.amount > 0; "Settlement amount must be greater than zero")
+    require(settlement.proof_hash != ""; "Proof hash is required for settlement")
+
+    const confirmationHash = hash("SHA256", settlement.settlement_id, settlement.proof_hash, settlement.amount)
+
+    emit("PaymentSettled", {
+      settlementId: settlement.settlement_id,
+      payer: settlement.payer,
+      receiver: settlement.receiver,
+      amount: settlement.amount,
+      nonce: confirmationHash
+    })
+  }
+
+  fn expirePayment(input: PaymentExpiration): Event {
+    require(input.currentTime - input.timestamp > CreditPolicy.expirationWindow; "Payment has not yet expired")
+
+    const expirationId = hash("SHA256", input.tx_hash, input.timestamp, input.currentTime)
+
+    emit("PaymentExpired", {
+      tx_hash: input.tx_hash,
+      originalTime: input.timestamp,
+      expiredAt: input.currentTime,
+      nonce: expirationId
+    })
+  }
+}
