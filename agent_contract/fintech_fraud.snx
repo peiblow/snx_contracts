@@ -1,0 +1,114 @@
+library FintechFraud {
+  fn assessFraudRisk(activity: FraudActivity): Event {
+    try {
+      let score = 0
+
+      if (activity.accountAgeDays < 30) {
+        score = score + 25
+      }
+      if (activity.amount > 20000) {
+        score = score + 20
+      }
+      if (activity.amount > 100000) {
+        score = score + 20
+      }
+      score = score + activity.geoRisk
+
+      if (activity.deviceTrust < 50) {
+        score = score + 15
+      }
+
+      const riskId = hash("SHA256", activity.client, activity.action, activity.amount)
+
+      require(
+        score < FintechPolicy.fraudBlockThreshold;
+        Error("RISK_BLOCKED", "Risco bloqueante detectado")
+      )
+
+      if (score >= FintechPolicy.fraudReviewThreshold) {
+        emit("FraudReviewRequired", {
+          riskId: riskId,
+          client: activity.client,
+          action: activity.action,
+          amount: activity.amount,
+          riskScore: score,
+          status: "review"
+        })
+      } else {
+        emit("FraudRiskCleared", {
+          riskId: riskId,
+          client: activity.client,
+          action: activity.action,
+          amount: activity.amount,
+          riskScore: score,
+          status: "clear"
+        })
+      }
+    } catch (err) {
+      const rejections = {
+        RISK_BLOCKED: { client: activity.client, action: activity.action, amount: activity.amount, reason: "risk_above_block_threshold" }
+      }
+      const entry = rejections[err.code]
+      if (entry == null) {
+        emit("FraudRiskBlocked", {
+          client: activity.client,
+          action: activity.action,
+          amount: activity.amount,
+          reason: "unknown_error",
+          message: err.message
+        })
+      } else {
+        emit("FraudRiskBlocked", entry)
+      }
+    }
+  }
+
+  fn recordReviewDecision(decision: ReviewDecision): Event {
+    try {
+      require(
+        decision.riskId != "";
+        Error("MISSING_RISK_ID", "riskId é obrigatório")
+      )
+      require(
+        decision.approved == 0 || decision.approved == 1;
+        Error("INVALID_APPROVED", "approved deve ser 0 ou 1")
+      )
+
+      const decisionHash = hash("SHA256", decision.riskId, decision.reviewer, decision.approved)
+
+      if (decision.approved == 1) {
+        emit("ReviewDecisionApproved", {
+          riskId: decision.riskId,
+          client: decision.client,
+          riskScore: decision.riskScore,
+          reviewer: decision.reviewer,
+          nonce: decisionHash
+        })
+      } else {
+        emit("ReviewDecisionDenied", {
+          riskId: decision.riskId,
+          client: decision.client,
+          riskScore: decision.riskScore,
+          reviewer: decision.reviewer,
+          nonce: decisionHash
+        })
+      }
+    } catch (err) {
+      const rejections = {
+        MISSING_RISK_ID:  { client: decision.client, reason: "missing_risk_id" },
+        INVALID_APPROVED: { riskId: decision.riskId, client: decision.client, reason: "invalid_approved_flag" }
+      }
+      const entry = rejections[err.code]
+      if (entry == null) {
+        emit("ReviewDecisionRejected", {
+          riskId: decision.riskId,
+          client: decision.client,
+          reason: "unknown_error",
+          message: err.message
+        })
+      } else {
+        emit("ReviewDecisionRejected", entry)
+      }
+    }
+  }
+}

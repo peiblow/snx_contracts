@@ -1,0 +1,101 @@
+library FintechPix {
+  fn verifyScheduleWindow(sched: PixSchedule): Event {
+    try {
+      require(
+        sched.payer != sched.receiver;
+        Error("SAME_PARTIES", "Pagador e recebedor não podem ser o mesmo")
+      )
+      require(
+        sched.amount > 0;
+        Error("ZERO_AMOUNT", "Valor deve ser maior que zero")
+      )
+      require(
+        sched.scheduledAt > sched.currentTime;
+        Error("PAST_DATE", "Data agendada não pode ser no passado")
+      )
+      require(
+        sched.scheduledAt - sched.currentTime >= FintechPolicy.pixMinDelaySeconds;
+        Error("TOO_SOON", "Agendamento deve respeitar delay mínimo")
+      )
+      require(
+        sched.scheduledAt - sched.currentTime <= FintechPolicy.pixMaxDelaySeconds;
+        Error("TOO_FAR", "Agendamento excede janela máxima permitida")
+      )
+
+      const windowId = hash("SHA256", sched.payer, sched.receiver, sched.amount, sched.scheduledAt)
+
+      emit("PixScheduleWindowVerified", {
+        payer: sched.payer,
+        receiver: sched.receiver,
+        amount: sched.amount,
+        scheduledAt: sched.scheduledAt,
+        nonce: windowId
+      })
+    } catch (err) {
+      const rejections = {
+        SAME_PARTIES: { payer: sched.payer, receiver: sched.receiver, reason: "payer_equals_receiver" },
+        ZERO_AMOUNT:  { payer: sched.payer, receiver: sched.receiver, amount: sched.amount, reason: "zero_amount" },
+        PAST_DATE:    { payer: sched.payer, receiver: sched.receiver, scheduledAt: sched.scheduledAt, currentTime: sched.currentTime, reason: "scheduled_in_past" },
+        TOO_SOON:     { payer: sched.payer, receiver: sched.receiver, scheduledAt: sched.scheduledAt, currentTime: sched.currentTime, reason: "below_minimum_delay" },
+        TOO_FAR:      { payer: sched.payer, receiver: sched.receiver, scheduledAt: sched.scheduledAt, currentTime: sched.currentTime, reason: "above_maximum_delay" }
+      }
+      const entry = rejections[err.code]
+      if (entry == null) {
+        emit("PixScheduleRejected", {
+          payer: sched.payer,
+          receiver: sched.receiver,
+          reason: "unknown_error",
+          message: err.message
+        })
+      } else {
+        emit("PixScheduleRejected", entry)
+      }
+    }
+  }
+
+  fn commitPixSchedule(commit: PixCommit): Event {
+    try {
+      require(
+        commit.scheduleId != "";
+        Error("MISSING_ID", "scheduleId é obrigatório")
+      )
+      require(
+        commit.amount > 0;
+        Error("ZERO_AMOUNT", "Valor deve ser maior que zero")
+      )
+      require(
+        commit.payer != commit.receiver;
+        Error("SAME_PARTIES", "Pagador e recebedor não podem ser o mesmo")
+      )
+
+      const confirmationHash = hash("SHA256", commit.scheduleId, commit.payer, commit.receiver, commit.amount)
+
+      emit("PixScheduled", {
+        scheduleId: commit.scheduleId,
+        payer: commit.payer,
+        receiver: commit.receiver,
+        amount: commit.amount,
+        scheduledAt: commit.scheduledAt,
+        nonce: confirmationHash
+      })
+    } catch (err) {
+      const rejections = {
+        MISSING_ID:   { payer: commit.payer, receiver: commit.receiver, reason: "missing_schedule_id" },
+        ZERO_AMOUNT:  { scheduleId: commit.scheduleId, payer: commit.payer, receiver: commit.receiver, reason: "zero_amount" },
+        SAME_PARTIES: { scheduleId: commit.scheduleId, payer: commit.payer, receiver: commit.receiver, reason: "payer_equals_receiver" }
+      }
+      const entry = rejections[err.code]
+      if (entry == null) {
+        emit("PixCommitRejected", {
+          scheduleId: commit.scheduleId,
+          payer: commit.payer,
+          receiver: commit.receiver,
+          reason: "unknown_error",
+          message: err.message
+        })
+      } else {
+        emit("PixCommitRejected", entry)
+      }
+    }
+  }
+}

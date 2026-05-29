@@ -1,0 +1,99 @@
+library FintechTransfers {
+  fn verifyTransferAccounts(request: TransferRequest): Event {
+    try {
+      require(
+        request.from != request.to;
+        Error("SAME_ACCOUNT", "Origem e destino não podem ser a mesma conta")
+      )
+      require(
+        request.amount >= FintechPolicy.minTransferAmount;
+        Error("AMOUNT_BELOW_MIN", "Valor abaixo do mínimo de transferência")
+      )
+      require(
+        request.amount <= FintechPolicy.maxTransferAmount;
+        Error("AMOUNT_ABOVE_MAX", "Valor acima do máximo por transferência")
+      )
+      require(
+        request.currency == "BRL";
+        Error("CURRENCY_NOT_ALLOWED", "Apenas BRL é permitido em transferências internas")
+      )
+
+      const verificationId = hash("SHA256", request.from, request.to, request.amount)
+
+      // if yes we should emit RequireApproval event
+      // requireApproval(CONDITION, Error("DAILY_LIMIT_EXCEEDED", "Limite diário de transferência excedido"))
+
+      emit("TransferAccountsVerified", {
+        from: request.from,
+        to: request.to,
+        amount: request.amount,
+        currency: request.currency,
+        nonce: verificationId
+      })
+    } catch (err) {
+      const rejections = {
+        SAME_ACCOUNT:         { from: request.from, to: request.to, amount: request.amount, reason: "same_account" },
+        AMOUNT_BELOW_MIN:     { from: request.from, to: request.to, amount: request.amount, reason: "amount_below_minimum" },
+        AMOUNT_ABOVE_MAX:     { from: request.from, to: request.to, amount: request.amount, reason: "amount_above_maximum" },
+        CURRENCY_NOT_ALLOWED: { from: request.from, to: request.to, amount: request.amount, reason: "currency_not_allowed" }
+      }
+      const entry = rejections[err.code]
+      if (entry == null) {
+        emit("TransferAccountsRejected", {
+          from: request.from,
+          to: request.to,
+          amount: request.amount,
+          reason: "unknown_error",
+          message: err.message
+        })
+      } else {
+        emit("TransferAccountsRejected", entry)
+      }
+    }
+  }
+
+  fn executeTransfer(settlement: TransferSettlement): Event {
+    try {
+      require(
+        settlement.amount > 0;
+        Error("ZERO_AMOUNT", "Valor da liquidação deve ser maior que zero")
+      )
+      require(
+        settlement.transferId != "";
+        Error("MISSING_ID", "transferId é obrigatório")
+      )
+      require(
+        settlement.from != settlement.to;
+        Error("SAME_ACCOUNT", "Origem e destino não podem ser a mesma conta")
+      )
+
+      const confirmationHash = hash("SHA256", settlement.transferId, settlement.from, settlement.to, settlement.amount)
+
+      emit("TransferExecuted", {
+        transferId: settlement.transferId,
+        from: settlement.from,
+        to: settlement.to,
+        amount: settlement.amount,
+        nonce: confirmationHash
+      })
+    } catch (err) {
+      const rejections = {
+        ZERO_AMOUNT:  { transferId: settlement.transferId, from: settlement.from, to: settlement.to, reason: "zero_amount" },
+        MISSING_ID:   { from: settlement.from, to: settlement.to, amount: settlement.amount, reason: "missing_transfer_id" },
+        SAME_ACCOUNT: { transferId: settlement.transferId, from: settlement.from, to: settlement.to, reason: "same_account" }
+      }
+      const entry = rejections[err.code]
+      if (entry == null) {
+        emit("TransferExecutionRejected", {
+          transferId: settlement.transferId,
+          from: settlement.from,
+          to: settlement.to,
+          reason: "unknown_error",
+          message: err.message
+        })
+      } else {
+        emit("TransferExecutionRejected", entry)
+      }
+    }
+  }
+}

@@ -1,0 +1,108 @@
+library FintechInvestments {
+  fn verifyMarketWindow(order: InvestmentOrder): Event {
+    try {
+      require(
+        order.currentHour >= FintechPolicy.marketOpenHour;
+        Error("MARKET_CLOSED", "Mercado ainda não abriu")
+      )
+      require(
+        order.currentHour < FintechPolicy.marketCloseHour;
+        Error("MARKET_CLOSED", "Mercado já fechou")
+      )
+      require(
+        order.side == "BUY" || order.side == "SELL";
+        Error("INVALID_SIDE", "Lado da ordem inválido (esperado BUY ou SELL)")
+      )
+
+      let allowed = 0
+      for (i = 0; i < len(FintechPolicy.allowedAssets); i = i + 1) {
+        if (FintechPolicy.allowedAssets[i] == order.symbol) {
+          allowed = 1
+        }
+      }
+      require(
+        allowed == 1;
+        Error("ASSET_NOT_ALLOWED", "Ativo fora da allow-list")
+      )
+
+      const windowId = hash("SHA256", order.client, order.symbol, order.currentHour)
+
+      emit("MarketWindowVerified", {
+        client: order.client,
+        symbol: order.symbol,
+        side: order.side,
+        currentHour: order.currentHour,
+        nonce: windowId
+      })
+    } catch (err) {
+      const rejections = {
+        MARKET_CLOSED:     { client: order.client, symbol: order.symbol, currentHour: order.currentHour, reason: "market_closed" },
+        INVALID_SIDE:      { client: order.client, symbol: order.symbol, side: order.side, reason: "invalid_side" },
+        ASSET_NOT_ALLOWED: { client: order.client, symbol: order.symbol, reason: "asset_not_allowed" }
+      }
+      const entry = rejections[err.code]
+      if (entry == null) {
+        emit("MarketWindowRejected", {
+          client: order.client,
+          symbol: order.symbol,
+          reason: "unknown_error",
+          message: err.message
+        })
+      } else {
+        emit("MarketWindowRejected", entry)
+      }
+    }
+  }
+
+  fn placeInvestmentOrder(execution: OrderExecution): Event {
+    try {
+      require(
+        execution.totalAmount >= FintechPolicy.minOrderTicket;
+        Error("TICKET_BELOW_MIN", "Ticket abaixo do mínimo permitido")
+      )
+      require(
+        execution.totalAmount <= FintechPolicy.maxOrderTicket;
+        Error("TICKET_ABOVE_MAX", "Ticket acima do máximo permitido")
+      )
+      require(
+        execution.quantity > 0;
+        Error("ZERO_QUANTITY", "Quantidade deve ser maior que zero")
+      )
+      require(
+        execution.orderId != "";
+        Error("MISSING_ID", "orderId é obrigatório")
+      )
+
+      const placementHash = hash("SHA256", execution.orderId, execution.client, execution.symbol, execution.totalAmount)
+
+      emit("InvestmentOrderPlaced", {
+        orderId: execution.orderId,
+        client: execution.client,
+        symbol: execution.symbol,
+        side: execution.side,
+        quantity: execution.quantity,
+        totalAmount: execution.totalAmount,
+        nonce: placementHash
+      })
+    } catch (err) {
+      const rejections = {
+        TICKET_BELOW_MIN: { orderId: execution.orderId, client: execution.client, symbol: execution.symbol, totalAmount: execution.totalAmount, reason: "ticket_below_minimum" },
+        TICKET_ABOVE_MAX: { orderId: execution.orderId, client: execution.client, symbol: execution.symbol, totalAmount: execution.totalAmount, reason: "ticket_above_maximum" },
+        ZERO_QUANTITY:    { orderId: execution.orderId, client: execution.client, symbol: execution.symbol, reason: "zero_quantity" },
+        MISSING_ID:       { client: execution.client, symbol: execution.symbol, reason: "missing_order_id" }
+      }
+      const entry = rejections[err.code]
+      if (entry == null) {
+        emit("InvestmentOrderRejected", {
+          orderId: execution.orderId,
+          client: execution.client,
+          symbol: execution.symbol,
+          reason: "unknown_error",
+          message: err.message
+        })
+      } else {
+        emit("InvestmentOrderRejected", entry)
+      }
+    }
+  }
+}

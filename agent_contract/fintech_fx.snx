@@ -1,0 +1,112 @@
+library FintechFx {
+  fn quoteExchange(request: FxRequest): Event {
+    try {
+      require(
+        request.amount >= FintechPolicy.minFxAmount;
+        Error("AMOUNT_BELOW_MIN", "Valor abaixo do mínimo de câmbio")
+      )
+      require(
+        request.amount <= FintechPolicy.maxFxAmount;
+        Error("AMOUNT_ABOVE_MAX", "Valor acima do máximo de câmbio")
+      )
+      require(
+        request.marketRate > 0;
+        Error("INVALID_RATE", "Taxa de mercado inválida")
+      )
+
+      let allowed = 0
+      for (i = 0; i < len(FintechPolicy.allowedCurrencyPairs); i = i + 1) {
+        if (FintechPolicy.allowedCurrencyPairs[i] == request.pair) {
+          allowed = 1
+        }
+      }
+      require(
+        allowed == 1;
+        Error("PAIR_NOT_ALLOWED", "Par de moedas não permitido")
+      )
+
+      const spreadAdjusted = request.marketRate + (request.marketRate * FintechPolicy.fxSpreadBps) / 10000
+      const quoteId = hash("SHA256", request.client, request.pair, request.amount, request.marketRate)
+
+      emit("ExchangeQuoted", {
+        quoteId: quoteId,
+        client: request.client,
+        pair: request.pair,
+        amount: request.amount,
+        marketRate: request.marketRate,
+        finalRate: spreadAdjusted,
+        spreadBps: FintechPolicy.fxSpreadBps
+      })
+    } catch (err) {
+      const rejections = {
+        AMOUNT_BELOW_MIN: { client: request.client, pair: request.pair, amount: request.amount, reason: "amount_below_minimum" },
+        AMOUNT_ABOVE_MAX: { client: request.client, pair: request.pair, amount: request.amount, reason: "amount_above_maximum" },
+        INVALID_RATE:     { client: request.client, pair: request.pair, reason: "invalid_market_rate" },
+        PAIR_NOT_ALLOWED: { client: request.client, pair: request.pair, amount: request.amount, reason: "currency_pair_not_allowed" }
+      }
+      const entry = rejections[err.code]
+      if (entry == null) {
+        emit("ExchangeQuoteRejected", {
+          client: request.client,
+          pair: request.pair,
+          reason: "unknown_error",
+          message: err.message
+        })
+      } else {
+        emit("ExchangeQuoteRejected", entry)
+      }
+    }
+  }
+
+  fn executeExchange(execution: FxExecution): Event {
+    try {
+      require(
+        execution.quoteId != "";
+        Error("MISSING_QUOTE", "quoteId é obrigatório")
+      )
+      require(
+        execution.currentTime >= execution.quoteTime;
+        Error("INVALID_TIME", "currentTime não pode ser anterior à cotação")
+      )
+      require(
+        execution.currentTime - execution.quoteTime <= FintechPolicy.fxQuoteValiditySeconds;
+        Error("QUOTE_EXPIRED", "Cotação expirou — solicite uma nova")
+      )
+      require(
+        execution.amount > 0;
+        Error("ZERO_AMOUNT", "Valor de câmbio deve ser maior que zero")
+      )
+
+      const convertedAmount = (execution.amount * execution.finalRate) / 10000
+      const settlementHash = hash("SHA256", execution.quoteId, execution.client, execution.amount, execution.finalRate)
+
+      emit("ExchangeExecuted", {
+        quoteId: execution.quoteId,
+        client: execution.client,
+        pair: execution.pair,
+        amount: execution.amount,
+        finalRate: execution.finalRate,
+        convertedAmount: convertedAmount,
+        nonce: settlementHash
+      })
+    } catch (err) {
+      const rejections = {
+        MISSING_QUOTE: { client: execution.client, pair: execution.pair, reason: "missing_quote_id" },
+        INVALID_TIME:  { quoteId: execution.quoteId, client: execution.client, reason: "invalid_current_time" },
+        QUOTE_EXPIRED: { quoteId: execution.quoteId, client: execution.client, quoteTime: execution.quoteTime, currentTime: execution.currentTime, reason: "quote_expired" },
+        ZERO_AMOUNT:   { quoteId: execution.quoteId, client: execution.client, reason: "zero_amount" }
+      }
+      const entry = rejections[err.code]
+      if (entry == null) {
+        emit("ExchangeExecutionRejected", {
+          quoteId: execution.quoteId,
+          client: execution.client,
+          reason: "unknown_error",
+          message: err.message
+        })
+      } else {
+        emit("ExchangeExecutionRejected", entry)
+      }
+    }
+  }
+}

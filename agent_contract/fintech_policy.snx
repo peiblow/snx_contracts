@@ -1,0 +1,31 @@
+library SynxFintechPolicies {
+    policy FintechPolicy {
+      minTransferAmount: 1
+      maxTransferAmount: 50000
+      maxDailyTransfer: 200000
+
+      allowedAssets: ["PETR4", "VALE3", "ITUB4", "MGLU3", "BTC", "USD"]
+      minOrderTicket: 100
+      maxOrderTicket: 100000
+      maxPositionExposure: 500000
+      marketOpenHour: 10
+      marketCloseHour: 17
+
+      fraudReviewThreshold: 60
+      fraudBlockThreshold: 85
+
+      allowedCurrencyPairs: ["BRL/USD", "USD/BRL", "BRL/EUR", "EUR/BRL"]
+      minFxAmount: 50
+      maxFxAmount: 500000
+      fxSpreadBps: 50
+      fxQuoteValiditySeconds: 60
+
+      pixMinDelaySeconds: 60
+      pixMaxDelaySeconds: 2592000
+
+      minAge: 18
+      kycBasicMinScore: 50
+      kycFullMinScore: 80
+      blockedCpfs: []
+    }
+}

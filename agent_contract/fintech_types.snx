@@ -1,0 +1,100 @@
+library FintechTypes {
+  type TransferRequest {
+    from: Address
+    to: Address
+    amount: UInt
+    currency: String
+    dailyTotal: UInt
+  }
+
+  type TransferSettlement {
+    transferId: String
+    from: Address
+    to: Address
+    amount: UInt
+  }
+
+  type InvestmentOrder {
+    client: Address
+    symbol: String
+    side: String
+    quantity: UInt
+    unitPrice: UInt
+    currentHour: UInt
+    currentExposure: UInt
+  }
+
+  type OrderExecution {
+    orderId: String
+    client: Address
+    symbol: String
+    side: String
+    quantity: UInt
+    totalAmount: UInt
+  }
+
+  type FraudActivity {
+    client: Address
+    action: String
+    amount: UInt
+    accountAgeDays: UInt
+    geoRisk: UInt
+    deviceTrust: UInt
+  }
+
+  type ReviewDecision {
+    riskId: String
+    client: Address
+    riskScore: UInt
+    reviewer: Address
+    approved: UInt
+  }
+
+  type FxRequest {
+    client: Address
+    pair: String
+    amount: UInt
+    marketRate: UInt
+  }
+
+  type FxExecution {
+    quoteId: String
+    client: Address
+    pair: String
+    amount: UInt
+    finalRate: UInt
+    quoteTime: UInt
+    currentTime: UInt
+  }
+
+  type PixSchedule {
+    payer: Address
+    receiver: Address
+    amount: UInt
+    scheduledAt: UInt
+    currentTime: UInt
+    description: String
+  }
+
+  type PixCommit {
+    scheduleId: String
+    payer: Address
+    receiver: Address
+    amount: UInt
+    scheduledAt: UInt
+  }
+
+  type IdentityCheck {
+    client: Address
+    cpf: String
+    age: UInt
+    faceMatchScore: UInt
+    documentScore: UInt
+  }
+
+  type KycResult {
+    client: Address
+    cpf: String
+    totalScore: UInt
+  }
+}

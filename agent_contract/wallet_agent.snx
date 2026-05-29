@@ -1,0 +1,16 @@
+import SynxFintechPolicies from "./fintech_policy.snx"
+import FintechTypes        from "./fintech_types.snx"
+import FintechTransfers    from "./fintech_transfers.snx"
+import FintechInvestments  from "./fintech_investments.snx"
+import FintechFraud        from "./fintech_fraud.snx"
+import FintechFx           from "./fintech_fx.snx"
+import FintechPix          from "./fintech_pix.snx"
+import FintechKyc          from "./fintech_kyc.snx"
+
+contract SynxFintech {
+  agent FintechOrchestrator {
+    version: "1.0.0"
+    owner: 0xA1B2C3D4
+    purpose: "fintech_orchestration"
+  }
+}
