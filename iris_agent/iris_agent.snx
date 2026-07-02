@@ -1,0 +1,111 @@
+import IrisTypes     from "./iris_types.snx"
+import IrisDecisions from "./iris_decisions.snx"
+import IrisFiles     from "./iris_files.snx"
+import IrisMessaging from "./iris_messaging.snx"
+
+contract PersonalAssistant {
+  agent Iris {
+    version: "1.0.0"
+    owner: 0xE1A2B3C4
+    purpose: "personal_decision_keeper"
+
+    model {
+      provider:    "anthropic"
+      name:        "claude-opus-4-6"
+      temperature: 0.3
+      maxTokens:   2048
+    }
+
+    behavior {
+      systemPrompt: "./prompts/iris.md"
+      maxSteps:     8
+      onDeny:       "reflect"
+      onError:      "abort"
+    }
+
+    trigger {
+      type:       "http"
+      route:      "/agent/{IRIS_HASH}/events"
+      method:     "POST"
+      auth:       "hmac"
+      secret_ref: "WPP_WEBHOOK_SECRET"
+    }
+
+    trigger {
+      type:      "filesystem"
+      path:      getEnv("DECISIONS_DIR")
+      ops:       ["create", "write"]
+      recursive: false
+      debounce:  "500ms"
+      pattern:   "*.md"
+    }
+
+    trigger {
+      type:     "cron"
+      schedule: "0 8 * * *"
+      timezone: "America/Sao_Paulo"
+      overlap:  "skip"
+    }
+
+    skills [
+      {
+        name:    "decision_logging"
+        content: "./skills/decision_logging.md"
+        uses:    [read_decisions, save_decision, send_wpp_message]
+      },
+      {
+        name:    "morning_review"
+        content: "./skills/morning_review.md"
+        uses:    [read_decisions, send_wpp_message]
+      }
+    ]
+
+    tool read_decisions {
+      description: "Reads the decision records saved in the Obsidian vault"
+      steps: [
+        {
+          function: IrisDecisions.readDecisions,
+          input: { query: String },
+          action: { type: "filesystem", operation: "read", path: getEnv("DECISIONS_DIR") }
+        }
+      ]
+    }
+
+    tool save_decision {
+      description: "Records a new decision as a Markdown note in the Obsidian vault"
+      steps: [
+        {
+          function: IrisDecisions.recordDecision,
+          input: { title: String, content: String },
+          action: {
+            type: "filesystem",
+            operation: "write",
+            path: getEnv("DECISIONS_DIR") + "/" + title + ".md"
+          }
+        }
+      ]
+    }
+
+    tool read_file {
+      description: "Reads a file from the filesystem at the given path"
+      steps: [
+        {
+          function: IrisFiles.readFile,
+          input: { path: String },
+          action: { type: "filesystem", operation: "read", path: path }
+        }
+      ]
+    }
+
+    tool send_wpp_message {
+      description: "Sends a WhatsApp message to the user"
+      steps: [
+        {
+          function: IrisMessaging.sendWppMessage,
+          input: { message: String },
+          action: { type: "http", method: "POST", url: getEnv("WPP_SEND_URL") }
+        }
+      ]
+    }
+  }
+}

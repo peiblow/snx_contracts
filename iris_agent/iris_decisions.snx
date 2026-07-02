@@ -1,0 +1,41 @@
+library IrisDecisions {
+  fn readDecisions(query: String): Event {
+    try {
+      require(
+        query != "";
+        Error("INVALID_QUERY", "query não pode ser vazia")
+      )
+
+      emit("DecisionsReadAllowed", {
+        query: query
+      })
+    } catch (err) {
+      emit("DecisionsReadDenied", {
+        query: query,
+        reason: err.message
+      })
+    }
+  }
+
+  fn recordDecision(note: DecisionNote): Event {
+    try {
+      require(
+        note.title != "";
+        Error("INVALID_TITLE", "title não pode ser vazio")
+      )
+      require(
+        note.content != "";
+        Error("INVALID_CONTENT", "content não pode ser vazio")
+      )
+
+      emit("DecisionRecorded", {
+        content: note.content
+      })
+    } catch (err) {
+      emit("DecisionRejected", {
+        title: note.title,
+        reason: err.message
+      })
+    }
+  }
+}

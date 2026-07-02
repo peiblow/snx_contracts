@@ -1,0 +1,19 @@
+library IrisFiles {
+  fn readFile(path: String): Event {
+    try {
+      require(
+        path != "";
+        Error("INVALID_PATH", "path não pode ser vazio")
+      )
+
+      emit("FileReadAllowed", {
+        path: path
+      })
+    } catch (err) {
+      emit("FileReadDenied", {
+        path: path,
+        reason: err.message
+      })
+    }
+  }
+}

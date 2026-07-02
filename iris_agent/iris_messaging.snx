@@ -1,0 +1,18 @@
+library IrisMessaging {
+  fn sendWppMessage(message: String): Event {
+    try {
+      require(
+        message != "";
+        Error("EMPTY_MESSAGE", "mensagem não pode ser vazia")
+      )
+
+      emit("WppMessageSent", {
+        message: message
+      })
+    } catch (err) {
+      emit("WppMessageRejected", {
+        reason: err.message
+      })
+    }
+  }
+}

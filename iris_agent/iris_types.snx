@@ -1,0 +1,6 @@
+library IrisTypes {
+  type DecisionNote {
+    title: String
+    content: String
+  }
+}
