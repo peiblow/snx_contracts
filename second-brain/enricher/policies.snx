@@ -1,0 +1,57 @@
+library EnricherGates {
+  fn listNotes(): Event {
+    emit("NotesListed", {
+      ok: true
+    })
+  }
+
+  fn readNote(path: String): Event {
+    try {
+      require(
+        path != "";
+        Error("EMPTY_PATH", "path não pode ser vazio")
+      )
+      require(
+        regx(path, "vault/Synx");
+        Error("OUT_OF_VAULT", "leitura permitida apenas dentro do vault Synx")
+      )
+
+      emit("NoteReadAllowed", {
+        path: path
+      })
+    } catch (err) {
+      emit("NoteReadRejected", {
+        reason: err.message
+      })
+    }
+  }
+
+  fn enrichNote(path: String, content: String): Event {
+    try {
+      require(
+        content != "";
+        Error("EMPTY_CONTENT", "conteúdo não pode ser vazio")
+      )
+      require(
+        regx(path, "vault/Synx/Captures/");
+        Error("OUT_OF_CAPTURES", "enriquecimento permitido apenas em vault/Synx/Captures")
+      )
+      require(
+        regx(path, ".md");
+        Error("NOT_MARKDOWN", "apenas arquivos .md podem ser escritos")
+      )
+      require(
+        !contains(path, "..");
+        Error("PATH_TRAVERSAL", "path não pode conter ..")
+      )
+
+      emit("NoteEnrichAllowed", {
+        content: content
+      })
+    } catch (err) {
+      emit("NoteEnrichRejected", {
+        reason: err.message
+      })
+    }
+  }
+}

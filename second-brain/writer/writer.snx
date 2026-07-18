@@ -1,0 +1,35 @@
+import WriterGates from "./policies.snx"
+
+contract WriterAssistant {
+  agent Writer {
+    version: "1.0.0"
+    owner: 0x5A17B0A2
+    purpose: "vault_writer"
+
+    model {
+      provider:    "ollama"
+      name:        "qwen3:8b"
+      temperature: 0
+      maxTokens:   2048
+    }
+
+    behavior {
+      systemPrompt: "./prompts/writer.md"
+      maxSteps:     4
+      onDeny:       "reflect"
+      onError:      "abort"
+      onFinish:     "write_note"
+    }
+
+    tool write_note {
+      description: "Persists a capture note to disk at the given path. This is your only action."
+      steps: [
+        {
+          function: WriterGates.writeNote,
+          input: { path: String, content: String },
+          action: { type: "filesystem", operation: "write", path: getEnv("VAULT_DIR") + "/Captures/" + path }
+        }
+      ]
+    }
+  }
+}

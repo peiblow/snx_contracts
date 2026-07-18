@@ -1,0 +1,4 @@
+endpoint = "http://localhost:8080"
+owner = "0x5A17B0A1"
+contract_name = "VaultAssistant"
+tenant_id = "vault-ask"

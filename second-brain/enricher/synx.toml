@@ -1,0 +1,4 @@
+endpoint = "http://localhost:8080"
+owner = "0x5A17B0A3"
+contract_name = "EnricherAssistant"
+tenant_id = "vault-enricher"

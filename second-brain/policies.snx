@@ -1,0 +1,71 @@
+library AskGates {
+  fn listNotes(): Event {
+    emit("NotesListed", {
+      ok: true
+    })
+  }
+
+  fn readNote(path: String): Event {
+    try {
+      require(
+        path != "";
+        Error("EMPTY_PATH", "path não pode ser vazio")
+      )
+      require(
+        regx(path, "vault/Synx");
+        Error("OUT_OF_VAULT", "leitura permitida apenas dentro do vault Synx")
+      )
+
+      emit("NoteReadAllowed", {
+        path: path
+      })
+    } catch (err) {
+      emit("NoteReadRejected", {
+        reason: err.message
+      })
+    }
+  }
+
+  fn replyOut(text: String): Event {
+    try {
+      require(
+        text != "";
+        Error("EMPTY_TEXT", "resposta não pode ser vazia")
+      )
+
+      emit("ReplyAllowed", {
+        text: text
+      })
+    } catch (err) {
+      emit("ReplyRejected", {
+        reason: err.message
+      })
+    }
+  }
+
+  fn handoffToWriter(path: String, content: String): Event {
+    try {
+      require(
+        content != "";
+        Error("EMPTY_CONTENT", "conteúdo não pode ser vazio")
+      )
+      require(
+        regx(path, ".md");
+        Error("NOT_MARKDOWN", "path deve ser um nome de arquivo .md")
+      )
+      require(
+        !contains(path, "/");
+        Error("NOT_A_FILENAME", "path deve ser só um nome de arquivo, sem barras")
+      )
+
+      emit("WriteHandedOff", {
+        path: path,
+        content: content
+      })
+    } catch (err) {
+      emit("HandoffRejected", {
+        reason: err.message
+      })
+    }
+  }
+}

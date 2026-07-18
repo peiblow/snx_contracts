@@ -1,0 +1,82 @@
+import AskGates from "./policies.snx"
+
+contract VaultAssistant {
+  agent Ask {
+    version: "1.0.0"
+    owner: 0x5A17B0A1
+    purpose: "vault_qa_assistant"
+
+    model {
+      provider:    "groq"
+      name:        "llama-3.3-70b-versatile"
+      temperature: 0
+      maxTokens:   2048
+    }
+
+    behavior {
+      systemPrompt: "./prompts/ask.md"
+      maxSteps:     20
+      onDeny:       "reflect"
+      onError:      "abort"
+      onFinish:     "reply"
+    }
+
+    trigger {
+      type:   "http"
+      route:  "/chat"
+      method: "POST"
+    }
+
+    tool list_notes {
+      description: "Lists every note in the vault (full paths). Call this FIRST so you only ever cite or read notes that actually exist — never invent a title."
+      steps: [
+        {
+          function: AskGates.listNotes,
+          input: {},
+          action: { type: "shell", command: "find", args: [getEnv("VAULT_DIR"), "-name", "*.md"] }
+        }
+      ]
+    }
+
+    tool read_note {
+      description: "Reads the full content of one note by the exact path returned by list_notes, to ground the answer in what the note really says."
+      steps: [
+        {
+          function: AskGates.readNote,
+          input: { path: String },
+          action: { type: "filesystem", operation: "read", path: path }
+        }
+      ]
+    }
+
+    tool save {
+      description: "Hands a capture note off to the write-only agent to be persisted. Use ONLY when the user explicitly asks to save, capture, or note something down. Provide path as a short descriptive filename ending in .md (just the filename, no folders), and the note body in content. The write is performed by a separate governed agent that stores it under the vault's Captures folder."
+      steps: [
+        {
+          function: AskGates.handoffToWriter,
+          input: { path: String, content: String },
+          action: { type: "dispatch", agent: getEnv("WRITER_HASH") }
+        }
+      ]
+    }
+
+    tool reply {
+      description: "Delivers the final answer back to the user on Telegram. Call this exactly once, at the end, with the complete answer in text. You do not handle addressing — only write the answer."
+      steps: [
+        {
+          function: AskGates.replyOut,
+          input: { text: String },
+          action: {
+            type:   "http",
+            method: "POST",
+            url:    getEnv("TG_SEND_URL"),
+            body: {
+              chat_id: getEnv("TG_CHAT_ID"),
+              text:    text
+            }
+          }
+        }
+      ]
+    }
+  }
+}

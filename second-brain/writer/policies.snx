@@ -1,0 +1,30 @@
+library WriterGates {
+  fn writeNote(path: String, content: String): Event {
+    try {
+      require(
+        content != "";
+        Error("EMPTY_CONTENT", "conteúdo não pode ser vazio")
+      )
+      require(
+        regx(path, ".md");
+        Error("NOT_MARKDOWN", "apenas arquivos .md podem ser escritos")
+      )
+      require(
+        !contains(path, "/");
+        Error("NOT_A_FILENAME", "path deve ser só um nome de arquivo, sem barras")
+      )
+      require(
+        !contains(path, "..");
+        Error("PATH_TRAVERSAL", "path não pode conter ..")
+      )
+
+      emit("NoteWriteAllowed", {
+        content: content
+      })
+    } catch (err) {
+      emit("NoteWriteRejected", {
+        reason: err.message
+      })
+    }
+  }
+}

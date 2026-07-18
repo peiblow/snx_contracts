@@ -1,0 +1,64 @@
+import EnricherGates from "./policies.snx"
+
+contract EnricherAssistant {
+  agent Enricher {
+    version: "1.0.0"
+    owner: 0x5A17B0A3
+    purpose: "vault_enricher"
+
+    model {
+      provider:    "ollama"
+      name:        "qwen3:8b"
+      temperature: 0
+      maxTokens:   4096
+    }
+
+    behavior {
+      systemPrompt: "./prompts/enricher.md"
+      maxSteps:     16
+      onDeny:       "reflect"
+      onError:      "abort"
+      onFinish:     "enrich_note"
+    }
+
+    trigger {
+      type:    "filesystem"
+      path:    getEnv("CAPTURES_DIR")
+      ops:     ["create"]
+      pattern: "*.md"
+    }
+
+    tool list_notes {
+      description: "Lists every note in the vault (full paths) so you can find notes related to the new capture."
+      steps: [
+        {
+          function: EnricherGates.listNotes,
+          input: {},
+          action: { type: "shell", command: "find", args: [getEnv("VAULT_DIR"), "-name", "*.md"] }
+        }
+      ]
+    }
+
+    tool read_note {
+      description: "Reads the full content of one note by its exact path — the new capture itself, or a related note you want to link to."
+      steps: [
+        {
+          function: EnricherGates.readNote,
+          input: { path: String },
+          action: { type: "filesystem", operation: "read", path: path }
+        }
+      ]
+    }
+
+    tool enrich_note {
+      description: "Overwrites the capture note with an enriched version (YAML frontmatter tags + [[wikilinks]] to related notes + expanded detail). Call this exactly once, at the end. path is the exact absolute path of the capture you are enriching; content is the full new Markdown."
+      steps: [
+        {
+          function: EnricherGates.enrichNote,
+          input: { path: String, content: String },
+          action: { type: "filesystem", operation: "write", path: path }
+        }
+      ]
+    }
+  }
+}

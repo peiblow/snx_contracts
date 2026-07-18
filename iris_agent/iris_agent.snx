@@ -45,6 +45,7 @@ contract PersonalAssistant {
       schedule: "0 8 * * *"
       timezone: "America/Sao_Paulo"
       overlap:  "skip"
+      skill:    "morning_review"
     }
 
     skills [

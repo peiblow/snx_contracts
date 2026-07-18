@@ -1,0 +1,4 @@
+endpoint = "http://localhost:8080"
+owner = "0x5A17B0A2"
+contract_name = "WriterAssistant"
+tenant_id = "vault-writer"
